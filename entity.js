@@ -6,43 +6,85 @@ export class Entity {
         this.tag = null;
         this.transform = null;
         // this.context = null;  // will be set in main.js -> deprecated
+        this._position = new THREE.Vector3(0, 0, 0);
+        this._rotation = new THREE.Euler(0, 0, 0);
+        this._scale = new THREE.Vector3(1, 1, 1);
         this.object = null;  // will be set in Init()
     }
 
-    get object() { return this._object;}
+    get object() { return this._object; }
 
     set object(obj) {
-        if (!(obj instanceof THREE.Mesh)) {
-            // None mesh object
+        // Accept null values
+        if (obj === null) {
+            this._object = null;
             return;
         }
-        this._object = obj;
-        this._object.name = this.name; // Set the name for the object
+        
+        // Accept both Mesh and Object3D
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.Object3D) {
+            this._object = obj;
+            this._object.name = this.name; // Set the name for the object
+        }
     }
 
-    get position() { return this.object.position; }
-    get rotation() { return this.object.rotation; }
-    get scale() { return this.object.scale; }
+    get position() { 
+        if (this._object && this._object.position) {
+            return this._object.position;
+        }
+        return this._position;
+    }
+    
+    get rotation() { 
+        if (this._object && this._object.rotation) {
+            return this._object.rotation;
+        }
+        return this._rotation;
+    }
+    
+    get scale() { 
+        if (this._object && this._object.scale) {
+            return this._object.scale;
+        }
+        return this._scale;
+    }
+    
     get transform() {
         // Will create a new object. Don't use it in a loop
         // or it will create a lot of garbage
         return {
-            position: this.object.position,
-            rotation: this.object.rotation,
-            scale: this.object.scale
+            position: this.position,
+            rotation: this.rotation,
+            scale: this.scale
         };
     }
+    
     set transform(value) {
         if (!value) return; // Ignore null or undefined
         const { position, rotation, scale } = value;
+        
         if (position) {
-            this.object.position.set(position.x, position.y, position.z);
+            if (this._object && this._object.position) {
+                this._object.position.set(position.x, position.y, position.z);
+            } else {
+                this._position.set(position.x, position.y, position.z);
+            }
         }
+        
         if (rotation) {
-            this.object.rotation.set(rotation.x, rotation.y, rotation.z);
+            if (this._object && this._object.rotation) {
+                this._object.rotation.set(rotation.x, rotation.y, rotation.z);
+            } else {
+                this._rotation.set(rotation.x, rotation.y, rotation.z);
+            }
         }
+        
         if (scale) {
-            this.object.scale.set(scale.x, scale.y, scale.z);
+            if (this._object && this._object.scale) {
+                this._object.scale.set(scale.x, scale.y, scale.z);
+            } else {
+                this._scale.set(scale.x, scale.y, scale.z);
+            }
         }
     }
 

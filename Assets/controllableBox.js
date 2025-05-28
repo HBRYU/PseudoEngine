@@ -14,14 +14,45 @@ export class ControllableBox extends Entity {
 
     Init() {
         const geometry = new THREE.BoxGeometry();
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x00ff00,
-            roughness: 0.1,
-            metalness: 0.1,
+        // const material = new THREE.MeshStandardMaterial({
+        //     color: 0x00ff00,
+        //     roughness: 0.1,
+        //     metalness: 0.1,
+        // });
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x00ff00, // Green color
         });
         this.object = new THREE.Mesh(geometry, material);
-        this.object.castShadow = true;
+        this.object.castShadow = false;
         this.object.receiveShadow = false;
+
+        // Create a point light
+        const pointLight = new THREE.PointLight(0x00ff00, 3, 10);
+        pointLight.position.set(0, 0, 0); // Position above the box
+        pointLight.castShadow = true;
+        
+        // Add the light as a child of the box
+        this.object.add(pointLight);
+        
+        // Set up light shadow properties
+        pointLight.shadow.mapSize.width = 512;
+        pointLight.shadow.mapSize.height = 512;
+        pointLight.shadow.camera.near = 0.1;
+        pointLight.shadow.camera.far = 10;
+        
+        // Make the box unaffected by its own light by adding it to
+        // the light's exclude list (available in Three.js r137+)
+        pointLight.excludeObjects = [this.object];
+        
+        // Alternative way to make the box unaffected by the light (for older Three.js versions)
+        // Create a light mask by adding the box to a different layer
+        // and configure the light to only affect certain layers
+        // this.object.layers.set(1);  // Put box on layer 1
+        // pointLight.layers.disable(1); // Light doesn't affect layer 1
+        // NOTE: If using this approach, ensure other objects are on layer 0
+        
+        // Store reference to the light
+        this.pointLight = pointLight;
     }
 
     Start() {
@@ -38,7 +69,7 @@ export class ControllableBox extends Entity {
         });
     }
 
-    Update() {
+    Update(deltaTime) {
         if (this.targetPosition) {
             // Move towards target at constant speed
             const direction = new THREE.Vector3();
@@ -47,9 +78,9 @@ export class ControllableBox extends Entity {
             // Don't move if we're very close to the target
             if (direction.length() >= 0.2) {
                 direction.normalize();
-                direction.multiplyScalar(this.speed * context.time.deltaTime); // Apply speed * deltaTime
+                direction.multiplyScalar(this.speed * deltaTime); // Apply speed * deltaTime
                 this.position.add(direction);
-                console.log('deltaTime:', context.time.deltaTime);
+                console.log('deltaTime:', deltaTime);
             } else {
                 // Snap to target position if close enough
                 this.position.copy(this.targetPosition);

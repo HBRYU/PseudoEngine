@@ -61,18 +61,21 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 function animate() {
-  requestAnimationFrame(animate);
-
-  // Update deltaTime
-  time.update();
-
-  // Update entities
-  entityList.forEach(entity => {
-    entity.Update();
-  });
-
-  // Use composer instead of renderer directly
-  composer.render();
+    requestAnimationFrame(animate);
+    
+    // Update timing
+    context.clock.previous = context.clock.current;
+    context.clock.current = performance.now() / 1000;
+    const deltaTime = context.clock.current - context.clock.previous;
+    
+    // Update entities
+    for (const entity of context.entityList) {
+        if (entity.Update) {
+            entity.Update(deltaTime);
+        }
+    }
+    
+    // Render
+    composer.render();
 }
 animate();
-

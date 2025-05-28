@@ -6,6 +6,7 @@ export class Plane extends Entity {
     constructor(name, width = 10, height = 10) {
         // Pass null for object - we'll create it in Init()
         super(name);
+        this.tag = 'groundPlane';
         this.width = width;  // Width of the plane
         this.height = height; // Height of the plane
     }
@@ -14,8 +15,8 @@ export class Plane extends Entity {
         // Create the mesh here instead of outside the class
         const geometry = new THREE.PlaneGeometry(this.width, this.height);  // width, height
         const material = new THREE.MeshStandardMaterial({
-            color: 0xffffff, // White color
-            roughness: 0.1,
+            color: 0x77a674,
+            roughness: 0.8,
             metalness: 0.1,
         });
         const mesh = new THREE.Mesh(geometry, material);
