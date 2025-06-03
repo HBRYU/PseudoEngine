@@ -80,7 +80,6 @@ export class ControllableBox extends Entity {
                 direction.normalize();
                 direction.multiplyScalar(this.speed * deltaTime); // Apply speed * deltaTime
                 this.position.add(direction);
-                console.log('deltaTime:', deltaTime);
             } else {
                 // Snap to target position if close enough
                 this.position.copy(this.targetPosition);

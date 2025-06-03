@@ -8,13 +8,19 @@ const entityList = [];
 // Scene - moved up before any scene.add() calls
 const scene = new THREE.Scene();
 
-import { ControllableBox } from './Assets/controllableBox.js';
+// import { ControllableBox } from './Assets/controllableBox.js';
 
-const playerBox = new ControllableBox('PlayerBox');
-playerBox.Init(); // Call Init to create the mesh
-playerBox.position.set(0, 0.5, 0); // Set initial position
+// const playerBox = new ControllableBox('PlayerBox');
+// playerBox.Init(); // Call Init to create the mesh
+// playerBox.position.set(0, 0.5, 0); // Set initial position
 
-entityList.push(playerBox);
+// entityList.push(playerBox);
+
+import { Car } from './Assets/car.js';
+const car = new Car('Car');
+car.Init(); // Call Init to create the mesh
+car.position.set(0, 0.5, 0); // Set initial position
+entityList.push(car);
 
 
 import { Plane } from './Assets/plane.js';
@@ -51,10 +57,11 @@ tileMap.createPath(10, 0, 10, 19, TileType.ROAD); // Vertical road
 // Add to scene
 scene.add(tileMap.object);
 
+
 import { CameraControl } from './Assets/cameraControl.js';
 const cameraControl = new CameraControl('CameraControl', 5);
 cameraControl.Init(); // Call Init to create the mesh
-cameraControl.target = playerBox; // Set the target to the player box
+cameraControl.target = car; 
 entityList.push(cameraControl);
 
 const lights = {
@@ -162,5 +169,5 @@ const context = {
     clock
 };
 
-// Export the entity list for main.js to use
+// Export the context for main.js to use
 export { context };

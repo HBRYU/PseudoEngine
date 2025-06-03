@@ -18,7 +18,7 @@ const {
 const composer = createPostProcessing(scene, camera, renderer);
 
 entityList.forEach(entity => {
-  if (entity.object && entity.object.isMesh) {
+  if (entity.object) {
     scene.add(entity.object);
   }
   entity.Start();

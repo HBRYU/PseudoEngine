@@ -24,7 +24,6 @@ export class CameraControl extends Entity {
     }
     
     Update(deltaTime) {
-        console.log('CameraControl Update');
         this.cameraTargetPosition = this.target.position.clone().add(this.offset);
         this.cameraPosition.lerp(this.cameraTargetPosition, this.speed * deltaTime);
         context.camera.position.copy(this.cameraPosition);
