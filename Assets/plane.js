@@ -15,7 +15,7 @@ export class Plane extends Entity {
         // Create the mesh here instead of outside the class
         const geometry = new THREE.PlaneGeometry(this.width, this.height);  // width, height
         const material = new THREE.MeshStandardMaterial({
-            color: 0x77a674,
+            color: 0xa9b0aa,
             roughness: 0.8,
             metalness: 0.1,
         });

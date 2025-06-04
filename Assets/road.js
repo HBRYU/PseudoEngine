@@ -134,6 +134,20 @@ export class TileMap extends Entity {
             }
         }
     }
+
+    fillCheckerBoard(startX, startZ, endX, endZ, type1 = TileType.GRASS, type2 = TileType.SAND) {
+        const minX = Math.max(0, Math.min(startX, endX));
+        const maxX = Math.min(this.gridSizeX - 1, Math.max(startX, endX));
+        const minZ = Math.max(0, Math.min(startZ, endZ));
+        const maxZ = Math.min(this.gridSizeZ - 1, Math.max(startZ, endZ));
+        
+        for (let x = minX; x <= maxX; x++) {
+            for (let z = minZ; z <= maxZ; z++) {
+                const type = (x + z) % 2 === 0 ? type1 : type2;
+                this.addTile(x, z, type);
+            }
+        }
+    }
     
     // Get tile at position
     getTile(x, z) {

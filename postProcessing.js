@@ -66,15 +66,14 @@ export function createPostProcessing(scene, camera, renderer) {
     };
     
     const colorPass = new ShaderPass(colorShader);
-    composer.addPass(colorPass);
-
-    // Add toon shader pass
+    composer.addPass(colorPass);    // Add toon shader pass
     const toonShader = {
         uniforms: {
             "tDiffuse": { value: null },
             "numLevels": { value: 16.0 },
             "edgeThickness": { value: 0.0 },
-            "edgeColor": { value: new THREE.Color(0x000000) }
+            "edgeColor": { value: new THREE.Color(0x000000) },
+            "resolution": { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -83,11 +82,11 @@ export function createPostProcessing(scene, camera, renderer) {
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
-        fragmentShader: `
-            uniform sampler2D tDiffuse;
+        fragmentShader: `            uniform sampler2D tDiffuse;
             uniform float numLevels;
             uniform float edgeThickness;
             uniform vec3 edgeColor;
+            uniform vec2 resolution;
             varying vec2 vUv;
             
             void main() {
@@ -96,12 +95,11 @@ export function createPostProcessing(scene, camera, renderer) {
                 
                 // Calculate luminance
                 float luminance = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
-                
-                // Quantize to get toon shading
+                  // Quantize to get toon shading
                 float level = floor(luminance * numLevels) / numLevels;
                 
-                // Edge detection using basic sobel
-                vec2 texelSize = vec2(1.0 / 1024.0, 1.0 / 1024.0);
+                // Edge detection using basic sobel with resolution uniform
+                vec2 texelSize = vec2(1.0) / resolution;
                 float dx = texture2D(tDiffuse, vUv + vec2(texelSize.x, 0.0)).r - 
                           texture2D(tDiffuse, vUv - vec2(texelSize.x, 0.0)).r;
                 float dy = texture2D(tDiffuse, vUv + vec2(0.0, texelSize.y)).r - 
@@ -121,10 +119,13 @@ export function createPostProcessing(scene, camera, renderer) {
                 gl_FragColor = vec4(toonColor, texel.a);
             }
         `
-    };
-
-    const toonPass = new ShaderPass(toonShader);
+    };    const toonPass = new ShaderPass(toonShader);
     composer.addPass(toonPass);
+    
+    // Update toon shader resolution on window resize
+    window.addEventListener('resize', () => {
+        toonPass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+    });
     
     // Add pixelation effect with nearest neighbor sampling
     const pixelShader = {

@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { Entity } from './entity.js';
-import { context } from './init.js';
+import { context, updateLightingForCamera } from './init.js';
 import { createPostProcessing } from './postProcessing.js';
 
 // unwrap context for readability
@@ -15,7 +15,14 @@ const {
 } = context;
 
 // Create post-processing composer
-const composer = createPostProcessing(scene, camera, renderer);
+let composer;
+try {
+    composer = createPostProcessing(scene, camera, renderer);
+    console.log('Post-processing enabled');
+} catch (error) {
+    console.warn('Post-processing failed, falling back to direct rendering:', error);
+    composer = null;
+}
 
 entityList.forEach(entity => {
   if (entity.object) {
@@ -52,9 +59,11 @@ window.addEventListener('resize', () => {
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
   }
-  
   // Common for both camera types
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) {
+    composer.setSize(window.innerWidth, window.innerHeight);
+  }
 });
 
 // Trigger resize once on startup to set the correct aspect ratio
@@ -73,9 +82,15 @@ function animate() {
         if (entity.Update) {
             entity.Update(deltaTime);
         }
-    }
+    }    // Update lighting to follow camera
+    updateLightingForCamera(context.camera.position);
     
-    // Render
-    composer.render();
+    // Render with post-processing or fallback to direct rendering
+    if (composer) {
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
 }
+
 animate();

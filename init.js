@@ -19,7 +19,8 @@ const scene = new THREE.Scene();
 import { Car } from './Assets/car.js';
 const car = new Car('Car');
 car.Init(); // Call Init to create the mesh
-car.position.set(0, 0.5, 0); // Set initial position
+car.setScale(0.01, 0.01, 0.01); // Scale the car to be 2x larger in all dimensions
+car.position.set(0, -0.2, 0); // Set initial position
 entityList.push(car);
 
 
@@ -38,24 +39,24 @@ for (let i = 0; i < 5; i++) {
     entityList.push(pillar);
 }
 
-// In init.js
-import { TileMap, TileType } from './Assets/road.js';
+// // In init.js
+// import { TileMap, TileType } from './Assets/road.js';
 
-// Create a 20x20 tilemap with 1-unit sized tiles
-const tileMap = new TileMap('WorldMap', 20, 20, 1);
+// // Create a 20x20 tilemap with 1-unit sized tiles
+// const tileMap = new TileMap('WorldMap', 200, 200, 1);
 
-// Fill the world with grass
-tileMap.fillGrid(TileType.GRASS);
+// // Fill the world with grass
+// tileMap.fillCheckerBoard(-100, -100, 100, 100, TileType.GRASS, TileType.SAND);
 
-// Create some water
-tileMap.fillArea(5, 5, 10, 8, TileType.WATER);
+// // Create some water
+// tileMap.fillArea(5, 5, 10, 8, TileType.WATER);
 
-// Create roads
-tileMap.createPath(0, 3, 19, 3, TileType.ROAD);  // Horizontal road
-tileMap.createPath(10, 0, 10, 19, TileType.ROAD); // Vertical road
+// // Create roads
+// tileMap.createPath(0, 3, 19, 3, TileType.ROAD);  // Horizontal road
+// tileMap.createPath(10, 0, 10, 19, TileType.ROAD); // Vertical road
 
-// Add to scene
-scene.add(tileMap.object);
+// // Add to scene
+// scene.add(tileMap.object);
 
 
 import { CameraControl } from './Assets/cameraControl.js';
@@ -66,7 +67,7 @@ entityList.push(cameraControl);
 
 const lights = {
     noon: {
-        ambient: {color: 0xa3d3ff, intensity: 1},
+        ambient: {color: 0xa3d3ff, intensity: 1.5},
         directional: {
             color: 0xfff5cc, 
             intensity: 4,
@@ -74,10 +75,10 @@ const lights = {
         }
     },
     sunset: {
-        ambient: {color: 0xa3d3ff, intensity: 1},
+        ambient: {color: 0xdf95e6, intensity: 1.5},
         directional: {
-            color: 0xffd6b0, 
-            intensity: 5,   
+            color: 0xfcba03, 
+            intensity: 9,   
             position: new THREE.Vector3(10, 5, -20)
         }
     },
@@ -85,7 +86,7 @@ const lights = {
         ambient: {color: 0x0a1929, intensity: 50},
         directional: {
             color: 0xc7ebff, 
-            intensity: 1,
+            intensity: 2,
             position: new THREE.Vector3(-5, 15, 5)
         }
     }
@@ -112,31 +113,31 @@ directionalLight.shadow.radius = 8; // Soft shadow edge blur
 directionalLight.shadow.bias = -0.0005; // Reduce shadow acne
 
 // bigger shadow map for smoother edges
-directionalLight.shadow.mapSize.set(1024, 1024);
+directionalLight.shadow.mapSize.set(2048, 2048); // Increased for better quality
 
-// orthographic volume that encloses the whole level
+// orthographic volume that encloses a large area around the scene
 const cam = directionalLight.shadow.camera;
-cam.left = -20;
-cam.right = 20;
-cam.top = 20;
-cam.bottom = -20;
+cam.left = -50;
+cam.right = 50;
+cam.top = 50;
+cam.bottom = -50;
 cam.near = 0.1;
-cam.far = 50;
+cam.far = 100; // Increased far distance
 cam.updateProjectionMatrix();
 
 scene.add(directionalLight);
 
 // Camera
-const camera = new THREE.OrthographicCamera(
-    -10, 10, 10, -10, 0.1, 1000
-);
-// const camera = new THREE.PerspectiveCamera(
-//     75, // Field of view
-//     window.innerWidth / window.innerHeight, // Aspect ratio
-//     0.1, // Near clipping plane
-//     1000 // Far clipping plane
+// const camera = new THREE.OrthographicCamera(
+//     -10, 10, 10, -10, 0.1, 1000
 // );
-camera.position.set(10, 10, 10); // Set camera position
+const camera = new THREE.PerspectiveCamera(
+    45, // Field of view
+    window.innerWidth / window.innerHeight, // Aspect ratio
+    0.1, // Near clipping plane
+    1000 // Far clipping plane
+);
+camera.position.set(20, 20, 20); // Set camera position
 camera.lookAt(new THREE.Vector3(0, 0, 0)); // Look at the origin
 
 
@@ -153,6 +154,72 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // THREE.defaultTextureFilter = THREE.NearestFilter;
 
 document.body.appendChild(renderer.domElement);
+
+// Add this to your main.js after renderer setup
+function createUI() {
+    // Create UI container
+    const uiContainer = document.createElement('div');
+    uiContainer.style.position = 'absolute';
+    uiContainer.style.top = '0';
+    uiContainer.style.left = '0';
+    uiContainer.style.width = '100%';
+    uiContainer.style.pointerEvents = 'none'; // Let clicks pass through to canvas
+    document.body.appendChild(uiContainer);
+    
+    // Create a status panel
+    const statusPanel = document.createElement('div');
+    statusPanel.style.background = 'rgba(0,0,0,0.5)';
+    statusPanel.style.color = 'white';
+    statusPanel.style.padding = '10px';
+    statusPanel.style.margin = '10px';
+    statusPanel.style.borderRadius = '5px';
+    statusPanel.style.fontFamily = 'monospace';
+    statusPanel.style.pointerEvents = 'auto'; // This element captures clicks
+    uiContainer.appendChild(statusPanel);    // Add content
+    statusPanel.innerHTML = `
+        <h3>Game Controls</h3>
+        <p>WASD - Move car</p>
+        <p>Space - Brake</p>
+        <p>Click & Drag - Orbit camera (horizontal & vertical)</p>
+        <p>Mouse Wheel - Zoom in/out</p>
+        <p>C - Toggle stability control</p>
+        <p>1/2/3 - Drift sensitivity (stable/balanced/drifty)</p>
+        <div id="speed">Speed: 0 km/h</div>
+        <div id="steering">Steering: 100%</div>
+    `;
+    
+    // Return references for updating
+    return {
+        updateSpeed: (speed) => {
+            document.getElementById('speed').textContent = `Speed: ${Math.round(speed)} km/h`;
+            
+            // Update steering effectiveness display
+            const speedInKmh = speed;
+            let steeringEffectiveness;
+            if (speedInKmh < 30) {
+                steeringEffectiveness = 100;
+            } else if (speedInKmh < 80) {
+                steeringEffectiveness = 100 - ((speedInKmh - 30) / 50) * 40;
+            } else {
+                steeringEffectiveness = 60 - ((speedInKmh - 80) / 40) * 30;
+                steeringEffectiveness = Math.max(30, steeringEffectiveness);
+            }
+            
+            const steeringElement = document.getElementById('steering');
+            if (steeringElement) {
+                steeringElement.textContent = `Steering: ${Math.round(steeringEffectiveness)}%`;
+            }
+        },
+        toggleUI: (enable) => {
+            uiContainer.style.display = enable ? 'block' : 'none';
+        }
+    };
+}
+
+// Use it in your main loop
+export const ui = createUI();
+ui.toggleUI(true); // Show UI on startup
+
 
 // Time tracking for deltaTime
 const clock = new THREE.Clock();
@@ -171,3 +238,45 @@ const context = {
 
 // Export the context for main.js to use
 export { context };
+
+
+// Then make sure to update the helper in your animation loop:
+function updateLightingForCamera(cameraPosition) {
+    // Update directional light position to be relative to camera
+    directionalLight.position.set(
+        cameraPosition.x + lights[currentLightingMode].directional.position.x,
+        lights[currentLightingMode].directional.position.y,
+        cameraPosition.z + lights[currentLightingMode].directional.position.z
+    );
+    
+    // Update light target to follow camera XZ
+    directionalLight.target.position.set(cameraPosition.x, 0, cameraPosition.z);
+    directionalLight.target.updateMatrixWorld();
+    
+    // Scale shadow area based on camera height/zoom - much larger coverage
+    const cameraHeight = Math.abs(cameraPosition.y);
+    const shadowSize = Math.max(50, cameraHeight * 3); // Increased minimum and multiplier
+    
+    // Update shadow camera - center on camera position for better coverage
+    const cam = directionalLight.shadow.camera;
+    cam.left = -shadowSize;
+    cam.right = shadowSize;
+    cam.top = shadowSize;
+    cam.bottom = -shadowSize;
+    
+    // Position shadow camera to center on the target area
+    cam.position.set(
+        cameraPosition.x + lights[currentLightingMode].directional.position.x,
+        lights[currentLightingMode].directional.position.y,
+        cameraPosition.z + lights[currentLightingMode].directional.position.z
+    );
+    
+    // Increase shadow distance based on scene size
+    cam.near = 0.1;
+    cam.far = shadowSize * 2; // Dynamic far plane
+    
+    cam.updateProjectionMatrix();
+}
+
+// Export the function so it can be used in main.js
+export { updateLightingForCamera };
