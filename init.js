@@ -177,43 +177,43 @@ function createUI() {
     statusPanel.style.pointerEvents = 'auto'; // This element captures clicks
     uiContainer.appendChild(statusPanel);    // Add content
     statusPanel.innerHTML = `
-        <h3>Game Controls</h3>
-        <p>WASD - Move car</p>
-        <p>Space - Brake</p>
-        <p>Click & Drag - Orbit camera (horizontal & vertical)</p>
-        <p>Mouse Wheel - Zoom in/out</p>
-        <p>C - Toggle stability control</p>
-        <p>1/2/3 - Drift sensitivity (stable/balanced/drifty)</p>
-        <div id="speed">Speed: 0 km/h</div>
-        <div id="steering">Steering: 100%</div>
-    `;
-    
-    // Return references for updating
-    return {
-        updateSpeed: (speed) => {
-            document.getElementById('speed').textContent = `Speed: ${Math.round(speed)} km/h`;
-            
-            // Update steering effectiveness display
-            const speedInKmh = speed;
-            let steeringEffectiveness;
-            if (speedInKmh < 30) {
-                steeringEffectiveness = 100;
-            } else if (speedInKmh < 80) {
-                steeringEffectiveness = 100 - ((speedInKmh - 30) / 50) * 40;
-            } else {
-                steeringEffectiveness = 60 - ((speedInKmh - 80) / 40) * 30;
-                steeringEffectiveness = Math.max(30, steeringEffectiveness);
-            }
-            
-            const steeringElement = document.getElementById('steering');
-            if (steeringElement) {
-                steeringElement.textContent = `Steering: ${Math.round(steeringEffectiveness)}%`;
-            }
-        },
-        toggleUI: (enable) => {
-            uiContainer.style.display = enable ? 'block' : 'none';
+    <h3>Game Controls</h3>
+    <p>WASD - Move car</p>
+    <p>Space - Brake</p>
+    <p>Click & Drag - Orbit camera (horizontal & vertical)</p>
+    <p>Mouse Wheel - Zoom in/out</p>
+    <p>C - Toggle stability control</p>
+    <p>1/2/3 - Drift sensitivity (stable/balanced/drifty)</p>
+    <div id="speed">Speed: 0 km/h</div>
+    <div id="steering">Steering: 100%</div>
+`;
+
+// Return references for updating
+return {
+    updateSpeed: (speed) => {
+        document.getElementById('speed').textContent = `Speed: ${Math.round(speed)} km/h`;
+        
+        // Update steering effectiveness display
+        const speedInKmh = speed;
+        let steeringEffectiveness;
+        if (speedInKmh < 30) {
+            steeringEffectiveness = 100;
+        } else if (speedInKmh < 80) {
+            steeringEffectiveness = 100 - ((speedInKmh - 30) / 50) * 40;
+        } else {
+            steeringEffectiveness = 60 - ((speedInKmh - 80) / 40) * 30;
+            steeringEffectiveness = Math.max(30, steeringEffectiveness);
         }
-    };
+        
+        const steeringElement = document.getElementById('steering');
+        if (steeringElement) {
+            steeringElement.textContent = `Steering: ${Math.round(steeringEffectiveness)}%`;
+        }
+    },
+    toggleUI: (enable) => {
+        uiContainer.style.display = enable ? 'block' : 'none';
+    }
+};
 }
 
 // Use it in your main loop

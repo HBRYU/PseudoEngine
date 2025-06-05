@@ -358,21 +358,10 @@ export class Car extends Entity {
         const lateralVelocity = localVelocity.x;
         const speed = this.getSpeed();
         
-        // Calculate slip angle for stability control
-        const slipAngle = Math.abs(forwardVelocity) > 0.1 ? 
-            Math.atan2(Math.abs(lateralVelocity), Math.abs(forwardVelocity)) : 0;
-        
-        // Stability control factor - reduces forces when sliding too much
-        let stabilityFactor = 1.0;
-        if (this.stabilityControl && slipAngle > this.maxSlipAngle) {
-            stabilityFactor = this.stabilityFactor;
-            console.log("Stability control active - slip angle:", slipAngle.toFixed(2));
-        }
-        
-        // Engine forces with stability control
+        // Engine forces (removed stability control interference)
         if (this.accelPressed) {
             const speedFactor = Math.max(0.2, 1.0 - Math.pow(forwardVelocity / this.maxSpeed, 2));
-            forces.longitudinal += this.engineForce * speedFactor * stabilityFactor;
+            forces.longitudinal += this.engineForce * speedFactor; // No stabilityFactor here
         }
         
         // Braking forces
@@ -402,93 +391,60 @@ export class Car extends Entity {
             forces.longitudinal = -forwardVelocity * this.mass / deltaTime;
         }
         
-        // IMPROVED: Progressive lateral friction with drift control
+        // Simplified lateral friction (removed progressive friction complexity)
         if (Math.abs(lateralVelocity) > 0.05) {
-            // Progressive friction that allows controlled sliding
-            const maxLateralFriction = this.tireFriction * normalForce;
-            
-            // Calculate friction based on lateral velocity - allows for controlled drifts
-            const lateralSpeedFactor = Math.min(1.0, Math.abs(lateralVelocity) / 3.0); // Normalize to 3 m/s max lateral speed
-            const progressiveFriction = maxLateralFriction * (0.3 + 0.7 * (1.0 - lateralSpeedFactor));
-            
-            forces.lateral += -Math.sign(lateralVelocity) * progressiveFriction;
+            const lateralFrictionForce = -this.tireFriction * normalForce * Math.sign(lateralVelocity);
+            forces.lateral += lateralFrictionForce;
         }
         
-        // FIXED: Improved steering that works at all speeds
+        // FIXED: Speed-dependent steering that works at all speeds
         const steeringInput = this.leftPressed ? 1 : (this.rightPressed ? -1 : 0);
-    
+
         if (Math.abs(forwardVelocity) > 0.5 && steeringInput !== 0) {
-            // NEW: More realistic speed-dependent steering curve
-            // Instead of cutting off steering, reduce it progressively
-            const speedInKmh = Math.abs(forwardVelocity) * 3.6; // Convert to km/h for easier tuning
+            const speedInKmh = Math.abs(forwardVelocity) * 3.6; // Convert to km/h
             
             // Steering effectiveness curve - maintains steering at high speeds
             let steeringEffectiveness;
             if (speedInKmh < 30) {
-                // Full steering at low speeds (0-30 km/h)
-                steeringEffectiveness = 1.0;
+                steeringEffectiveness = 1.0; // Full steering at low speeds
             } else if (speedInKmh < 80) {
-                // Gradual reduction from 30-80 km/h
                 steeringEffectiveness = 1.0 - ((speedInKmh - 30) / 50) * 0.4; // Reduce to 60% at 80 km/h
             } else {
-                // Minimum steering at very high speeds (80+ km/h) - but never zero
                 steeringEffectiveness = 0.6 - ((speedInKmh - 80) / 40) * 0.3; // Reduce to 30% at 120 km/h
                 steeringEffectiveness = Math.max(0.3, steeringEffectiveness); // Never go below 30%
             }
             
             // Maximum steering angle based on speed
-            const maxSteeringAngle = 0.5 * steeringEffectiveness; // Up to 0.5 radians (~29 degrees)
+            const maxSteeringAngle = 0.5 * steeringEffectiveness;
             const steeringAngle = steeringInput * maxSteeringAngle;
             
-            // IMPROVED: Better cornering force calculation
-            // Use a more sophisticated tire model that accounts for speed
-            const baseCorneringStiffness = this.corneringStiffness;
-            
-            // Cornering stiffness decreases slightly with speed (tire load sensitivity)
-            const speedFactor = 1.0 / (1.0 + Math.pow(speedInKmh / 100, 2) * 0.2); // Slight reduction at very high speeds
-            const adjustedCorneringStiffness = baseCorneringStiffness * speedFactor;
-            
-            // Calculate slip angle and cornering force
+            // Simple cornering force calculation (removed complex tire model)
             const currentSlipAngle = Math.atan2(lateralVelocity, Math.abs(forwardVelocity));
             const targetSlipAngle = currentSlipAngle - steeringAngle;
             
-            // Progressive cornering force
-            let corneringForce = -adjustedCorneringStiffness * targetSlipAngle;
+            // Basic cornering force
+            let corneringForce = -this.corneringStiffness * targetSlipAngle;
             
-            // Limit cornering force but scale with speed for realism
-            const maxCorneringForce = 8000 + (speedInKmh * 20); // Slightly more force available at higher speeds
+            // Limit cornering force
+            const maxCorneringForce = 15000; // Increased from 8000 for better high-speed response
             corneringForce = Math.max(-maxCorneringForce, Math.min(corneringForce, maxCorneringForce));
             
-            // Apply stability control to cornering
-            corneringForce *= stabilityFactor;
-            
+            // NO stability control interference - apply full cornering force
             forces.lateral += corneringForce;
             
-            // IMPROVED: Torque calculation with better high-speed handling
+            // Torque calculation
             const wheelbase = 2.5;
             let torqueFromSteering = corneringForce * (wheelbase / 2) * Math.sign(forwardVelocity);
             
-            // Scale torque with steering effectiveness instead of cutting it off
+            // Scale torque with steering effectiveness
             torqueFromSteering *= steeringEffectiveness;
-            
-            // Reduce torque when sliding to prevent spin-outs
-            if (slipAngle > this.maxSlipAngle * 0.5) {
-                torqueFromSteering *= 0.7; // Less aggressive reduction
-            }
             
             forces.torque += torqueFromSteering;
             
             // Debug output for high-speed steering
             if (speedInKmh > 50) {
-                console.log(`High speed steering - Speed: ${speedInKmh.toFixed(1)} km/h, Effectiveness: ${(steeringEffectiveness * 100).toFixed(1)}%`);
+                console.log(`High speed steering - Speed: ${speedInKmh.toFixed(1)} km/h, Effectiveness: ${(steeringEffectiveness * 100).toFixed(1)}%, Force: ${corneringForce.toFixed(0)}`);
             }
-        }
-        
-        // NEW: Counter-steering assistance when sliding
-        if (slipAngle > this.maxSlipAngle * 0.3 && Math.abs(this._angularVelocity) > 0.5) {
-            // Apply counter-torque to reduce spinning
-            const counterTorque = -Math.sign(this._angularVelocity) * 2000 * Math.min(slipAngle / this.maxSlipAngle, 1.0);
-            forces.torque += counterTorque;
         }
         
         return forces;
@@ -529,24 +485,14 @@ export class Car extends Entity {
             this._velocity.y = 0;
         }
         
-        // IMPROVED: Angular velocity constraints with drift consideration
-        const maxAngularVelocity = 2.5; // Reduced from 3.0 for more control
+        // Basic angular velocity constraints
+        const maxAngularVelocity = 3.0;
         if (Math.abs(this._angularVelocity) > maxAngularVelocity) {
             this._angularVelocity = Math.sign(this._angularVelocity) * maxAngularVelocity;
         }
         
-        // Calculate current slip for adaptive damping
-        const localVelocity = this.getLocalVelocity();
-        const slipAngle = Math.abs(localVelocity.y) > 0.1 ? 
-            Math.atan2(Math.abs(localVelocity.x), Math.abs(localVelocity.y)) : 0;
-        
-        // Adaptive angular damping - more damping when sliding
-        let angularDamping = 0.95;
-        if (slipAngle > this.maxSlipAngle * 0.5) {
-            angularDamping = this.antiSpinDamping; // More aggressive damping during slides
-        }
-        
-        this._angularVelocity *= angularDamping;
+        // Simple angular damping (no adaptive damping based on slip)
+        this._angularVelocity *= 0.95;
         
         // Stop small oscillations
         if (Math.abs(this._angularVelocity) < 0.01) {
