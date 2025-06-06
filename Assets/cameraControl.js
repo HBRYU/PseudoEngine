@@ -11,7 +11,13 @@ export class CameraControl extends Entity {
         this.speed = speed; // Speed of camera movement
         this.target = null;  // should be set in init.js
         this.offset = new THREE.Vector3(20, 20, 20); // Offset from the target position
-        this.cameraPosition = new THREE.Vector3(0, 0, 0); // Current camera position          // Orbit controls
+        this.cameraPosition = new THREE.Vector3(0, 0, 0); // Current camera position
+        
+        // Camera modes
+        this.cameraMode = 'orbital'; // 'orbital' or 'forward'
+        this.forwardOffset = new THREE.Vector3(0, 8, -15); // Offset behind car for forward mode
+        
+        // Orbit controls
         this.orbitAngle = 0; // Current horizontal orbit angle in radians
         this.elevationAngle = 0; // Current vertical elevation angle in radians
         this.orbitRadius = Math.sqrt(this.offset.x * this.offset.x + this.offset.z * this.offset.z); // Distance from target
@@ -29,30 +35,54 @@ export class CameraControl extends Entity {
         this.lastMouseY = 0;
         this.isMouseDown = false;
         
-        // Bind mouse events
+        // Bind mouse events and keyboard controls
         this.setupMouseControls();
+        this.setupKeyboardControls();
     }    Init() {
         // this.object = context.camera;
     }    setupMouseControls() {
         // Choose orbit control method:
         // Method 1: Click and drag to orbit
         // Method 2: Mouse X position continuously controls orbit (uncomment the section below)
-          // Method 1: Click and drag orbiting
+        
+        // Method 1: Click and drag orbiting
         window.addEventListener('mousemove', (event) => {
             this.mouseX = event.clientX;
             this.mouseY = event.clientY;
             
-            if (this.isMouseDown) {
+            if (this.isMouseDown && this.cameraMode === 'orbital') {
                 this.updateOrbitFromMouse();
             }
         });
 
         window.addEventListener('mousedown', (event) => {
-            this.isMouseDown = true;
-            this.lastMouseX = event.clientX;
-            this.lastMouseY = event.clientY;
-        });window.addEventListener('mouseup', () => {
+            if (this.cameraMode === 'orbital') {
+                this.isMouseDown = true;
+                this.lastMouseX = event.clientX;
+                this.lastMouseY = event.clientY;
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
             this.isMouseDown = false;
+        });
+
+        // Mouse wheel zoom for both modes
+        window.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            
+            if (this.cameraMode === 'orbital') {
+                // Orbital mode: zoom in/out by changing orbit radius
+                const zoomSpeed = 0.001;
+                this.orbitRadius += event.deltaY * zoomSpeed;
+                this.orbitRadius = Math.max(this.minRadius, Math.min(this.maxRadius, this.orbitRadius));
+            } else if (this.cameraMode === 'forward') {
+                // Forward mode: zoom in/out by changing the offset distance
+                const zoomSpeed = 0.01;
+                const offsetLength = this.forwardOffset.length();
+                const newLength = Math.max(5, Math.min(30, offsetLength + event.deltaY * zoomSpeed));
+                this.forwardOffset.normalize().multiplyScalar(newLength);
+            }
         });
 
         // Method 2: Continuous mouse X position orbiting (uncomment to use instead of click-drag)
@@ -63,7 +93,26 @@ export class CameraControl extends Entity {
             this.orbitAngle = normalizedX * Math.PI * 2;
         });
         */
-    }    updateOrbitFromMouse() {
+    }
+    
+    setupKeyboardControls() {
+        window.addEventListener('keydown', (event) => {
+            switch(event.key.toLowerCase()) {
+                case 'v': // Toggle camera mode
+                    this.toggleCameraMode();
+                    break;
+            }
+        });
+    }
+      toggleCameraMode() {
+        this.cameraMode = this.cameraMode === 'orbital' ? 'forward' : 'orbital';
+        console.log(`Camera mode switched to: ${this.cameraMode}`);
+        
+        // Update UI if available
+        if (typeof window !== 'undefined' && window.ui && window.ui.updateCameraMode) {
+            window.ui.updateCameraMode(this.cameraMode);
+        }
+    }updateOrbitFromMouse() {
         const deltaX = this.mouseX - this.lastMouseX;
         const deltaY = this.mouseY - this.lastMouseY;
         
@@ -89,30 +138,63 @@ export class CameraControl extends Entity {
     updateCameraPosition() {
         if (!this.target) return;
         
-        // Calculate orbital position around target with both horizontal and vertical angles
-        const horizontalDistance = this.orbitRadius * Math.cos(this.elevationAngle);
-        const x = Math.sin(this.orbitAngle) * horizontalDistance;
-        const z = Math.cos(this.orbitAngle) * horizontalDistance;
-        const y = this.orbitRadius * Math.sin(this.elevationAngle);
-        
-        // Set camera target position based on orbit
-        this.cameraTargetPosition = new THREE.Vector3(
-            this.target.position.x + x,
-            this.target.position.y + this.orbitHeight + y,
-            this.target.position.z + z
-        );
+        if (this.cameraMode === 'orbital') {
+            // Calculate orbital position around target with both horizontal and vertical angles
+            const horizontalDistance = this.orbitRadius * Math.cos(this.elevationAngle);
+            const x = Math.sin(this.orbitAngle) * horizontalDistance;
+            const z = Math.cos(this.orbitAngle) * horizontalDistance;
+            const y = this.orbitRadius * Math.sin(this.elevationAngle);
+            
+            // Set camera target position based on orbit
+            this.cameraTargetPosition = new THREE.Vector3(
+                this.target.position.x + x,
+                this.target.position.y + this.orbitHeight + y,
+                this.target.position.z + z
+            );        } else if (this.cameraMode === 'forward') {
+            // Forward-facing camera mode: position camera behind car facing forward
+            const carRotation = this.target.object ? this.target.object.rotation.y : 0;
+            
+            // Create offset vector in local space (behind the car)
+            const localOffset = this.forwardOffset.clone();
+            
+            // Rotate offset based on car's rotation
+            const rotationMatrix = new THREE.Matrix4().makeRotationY(carRotation);
+            localOffset.applyMatrix4(rotationMatrix);
+            
+            // Set camera target position behind car
+            this.cameraTargetPosition = new THREE.Vector3(
+                this.target.position.x + localOffset.x,
+                this.target.position.y + localOffset.y,
+                this.target.position.z + localOffset.z
+            );
+        }
     }
-    
-    Update(deltaTime) {
+      Update(deltaTime) {
         this.updateCameraPosition();
         
         // Smoothly move camera to target position
         this.cameraPosition.lerp(this.cameraTargetPosition, this.speed * deltaTime);
         context.camera.position.copy(this.cameraPosition);
         
-        // Always look at the target
+        // Set camera look-at based on mode
         if (this.target) {
-            context.camera.lookAt(this.target.position);
+            if (this.cameraMode === 'orbital') {
+                // Orbital mode: always look at the car
+                context.camera.lookAt(this.target.position);
+            } else if (this.cameraMode === 'forward') {
+                // Forward mode: look in the direction the car is facing
+                const carRotation = this.target.object ? this.target.object.rotation.y : 0;
+                
+                // Calculate a point in front of the car
+                const lookAtDistance = 20;
+                const lookAtPoint = new THREE.Vector3(
+                    this.target.position.x + Math.sin(carRotation) * lookAtDistance,
+                    this.target.position.y,
+                    this.target.position.z + Math.cos(carRotation) * lookAtDistance
+                );
+                
+                context.camera.lookAt(lookAtPoint);
+            }
         }
     }
 }

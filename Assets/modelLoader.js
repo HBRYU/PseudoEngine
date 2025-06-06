@@ -7,8 +7,7 @@ import { Entity } from '../entity.js';
 export class GLTFModel extends Entity {
     constructor(name, modelPath, options = {}) {
         super(name);
-        this.modelPath = modelPath;
-        this.isLoaded = false;
+        this.modelPath = modelPath;        this.isLoaded = false;
         this.options = {
             position: options.position || new THREE.Vector3(0, 0, 0),
             rotation: options.rotation || new THREE.Euler(0, 0, 0),
@@ -16,8 +15,7 @@ export class GLTFModel extends Entity {
             castShadow: options.castShadow !== undefined ? options.castShadow : true,
             receiveShadow: options.receiveShadow !== undefined ? options.receiveShadow : true,
             onLoad: options.onLoad || null
-        };
-    }
+        };}
 
     Init() {
         // We'll load the model in this method
@@ -39,8 +37,7 @@ export class GLTFModel extends Entity {
                     if (node.isMesh) {
                         node.castShadow = this.options.castShadow;
                         node.receiveShadow = this.options.receiveShadow;
-                    }
-                });
+                    }                });
                 
                 // Call the onLoad callback if provided
                 if (this.options.onLoad) {

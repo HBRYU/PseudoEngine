@@ -16,27 +16,103 @@ const scene = new THREE.Scene();
 
 // entityList.push(playerBox);
 
+// Load the road from TrackTexture3.json (curved track)
+import { RoadLoader } from './Assets/roadLoader.js';
+const roadLoader = new RoadLoader('Road', './Assets/TrackTexture3.json', scene);
+roadLoader.Init();
+entityList.push(roadLoader);
+
+// Add a white background plane underneath the road for contrast
+import { Plane } from './Assets/plane.js';
+const backgroundPlane = new Plane('BackgroundPlane', 1000, 1000);
+backgroundPlane.Init();
+backgroundPlane.position.set(0, -0.1, 0);
+// Make it white for contrast with the black road
+if (backgroundPlane.object && backgroundPlane.object.material) {
+    backgroundPlane.object.material.color.setHex(0xffffff);
+}
+entityList.push(backgroundPlane);
+
 import { Car } from './Assets/car.js';
 const car = new Car('Car');
 car.Init(); // Call Init to create the mesh
-car.setScale(0.01, 0.01, 0.01); // Scale the car to be 2x larger in all dimensions
-car.position.set(0, -0.2, 0); // Set initial position
+car.setScale(0.01, 0.01, 0.01); // Scale the car down
+
+// Position car at start point (we'll update this once road loads)
+car.object.position.set(0, 0, 0); // Car model is slightly above ground, so we can set Y to 0
 entityList.push(car);
 
+// Set up car positioning after road loads
+let carPositionInterval = setInterval(() => {
+    if (roadLoader.isLoaded && car.modelLoaded) {
+        let startPos = roadLoader.getStartPosition();
+          // If no start position found, use default
+        if (!startPos || (startPos.x === 0 && startPos.y === 0 && startPos.z === 0)) {
+            console.log('No start position found, using default position');
+            // Default start position - this will be scaled by roadScale below
+            startPos = new THREE.Vector3(-1.7, 0, -14.4); // Default start position based on typical TrackTexture3.json
+        }
+        
+        // Account for road scaling (3x) - multiply start position by road scale
+        const roadScale = 0.75; // Don't know why but this works. Don't touch.
+        const scaledStartPos = new THREE.Vector3(
+            startPos.x * roadScale,
+            startPos.y, // Y position stays the same (road is scaled as 3, 1, 3)
+            startPos.z * roadScale
+        );
+        
+        // Position car at the scaled start position
+        car.object.position.set(scaledStartPos.x, scaledStartPos.y + 0.5, scaledStartPos.z); // Add small Y offset
+        car.object.rotation.set(0, Math.PI, 0); // Face the car forward
 
-import { Plane } from './Assets/plane.js';
-const groundPlane = new Plane('GroundPlane', 2000, 2000);
-groundPlane.Init(); // Call Init to create the mesh
-entityList.push(groundPlane);
+        console.log(`Car positioned at scaled start: (${scaledStartPos.x}, ${scaledStartPos.y + 0.5}, ${scaledStartPos.z})`);
+        console.log(`Original start pos: (${startPos.x}, ${startPos.y}, ${startPos.z}), Road scale: ${roadScale}`);
+        
+        // Adjust car Y position to align bottom with ground (y=0) - only after model is loaded
+        car.alignWithGround();
+        
+        console.log(`Car final position: (${car.object.position.x}, ${car.object.position.y}, ${car.object.position.z})`);
+        
+        // Set up road bounds for off-road detection
+        if (roadLoader.object) {
+            car.setRoadBounds(roadLoader.object);
+            console.log('Road bounds set up for car off-road detection');
+        }
+        
+        clearInterval(carPositionInterval); // Stop checking once positioned
+        clearTimeout(carPositionTimeout); // Clear the timeout as well
+        console.log('Car successfully spawned and positioned!');
+    } else {
+        console.log(`Waiting for: roadLoader.isLoaded=${roadLoader.isLoaded}, car.modelLoaded=${car.modelLoaded}`);
+    }
+}, 100); // Check every 100ms
+
+// Add timeout to prevent infinite waiting - store reference so we can clear it
+const carPositionTimeout = setTimeout(() => {
+    if (carPositionInterval) {
+        clearInterval(carPositionInterval);
+        console.warn('Car positioning timeout - forcing default position');
+        // Force position the car even if something didn't load properly
+        // Use scaled default position to match road scaling
+        const roadScale = 3;
+        car.object.position.set(0 * roadScale, 0.5, 0 * roadScale);
+        if (car.modelLoaded) {
+            car.alignWithGround();
+        }
+    }
+}, 5000); // 5 second timeout
 
 
 
 import { Pillar } from './Assets/pillar.js';
+// Position pillars along the road areas - will be adjusted once road loads
+const pillars = [];
 for (let i = 0; i < 5; i++) {
     const pillar = new Pillar(`Pillar${i + 1}`, 0.5, 5);
     pillar.Init(); // Call Init to create the mesh
-    pillar.position.set(Math.random() * 20 - 10, pillar.height / 2, Math.random() * 10 - 5); // Random position
+    pillar.position.set(Math.random() * 100 - 50, pillar.height / 2, Math.random() * 100 - 50); // Spread around road area
     entityList.push(pillar);
+    pillars.push(pillar);
 }
 
 // // In init.js
@@ -60,7 +136,7 @@ for (let i = 0; i < 5; i++) {
 
 
 import { CameraControl } from './Assets/cameraControl.js';
-const cameraControl = new CameraControl('CameraControl', 5);
+const cameraControl = new CameraControl('CameraControl', 3);
 cameraControl.Init(); // Call Init to create the mesh
 cameraControl.target = car; 
 entityList.push(cameraControl);
@@ -177,15 +253,16 @@ function createUI() {
     statusPanel.style.pointerEvents = 'auto'; // This element captures clicks
     uiContainer.appendChild(statusPanel);    // Add content
     statusPanel.innerHTML = `
-    <h3>Game Controls</h3>
-    <p>WASD - Move car</p>
+    <h3>Game Controls</h3>    <p>WASD - Move car</p>
     <p>Space - Brake</p>
-    <p>Click & Drag - Orbit camera (horizontal & vertical)</p>
+    <p>Click & Drag - Orbit camera (orbital mode only)</p>
     <p>Mouse Wheel - Zoom in/out</p>
+    <p>V - Toggle camera mode (Orbital/Forward-facing)</p>
     <p>C - Toggle stability control</p>
-    <p>1/2/3 - Drift sensitivity (stable/balanced/drifty)</p>
-    <div id="speed">Speed: 0 km/h</div>
-    <div id="steering">Steering: 100%</div>
+    <p>1/2/3 - Drift sensitivity (stable/balanced/drifty)</p>    <div id="speed">Speed: 0 km/h</div>
+    <div id="steering">Steering: Consistent Torque</div>
+    <div id="roadStatus">Road Status: On Road</div>
+    <div id="cameraMode">Camera: Orbital Mode</div>
 `;
 
 // Return references for updating
@@ -193,21 +270,26 @@ return {
     updateSpeed: (speed) => {
         document.getElementById('speed').textContent = `Speed: ${Math.round(speed)} km/h`;
         
-        // Update steering effectiveness display
-        const speedInKmh = speed;
-        let steeringEffectiveness;
-        if (speedInKmh < 30) {
-            steeringEffectiveness = 100;
-        } else if (speedInKmh < 80) {
-            steeringEffectiveness = 100 - ((speedInKmh - 30) / 50) * 40;
-        } else {
-            steeringEffectiveness = 60 - ((speedInKmh - 80) / 40) * 30;
-            steeringEffectiveness = Math.max(30, steeringEffectiveness);
-        }
-        
+        // Steering is now consistent regardless of speed - no need to update steering display
         const steeringElement = document.getElementById('steering');
         if (steeringElement) {
-            steeringElement.textContent = `Steering: ${Math.round(steeringEffectiveness)}%`;
+            steeringElement.textContent = `Steering: Consistent Torque`;
+        }
+        
+        // Update road status based on car's current state
+        const roadStatusElement = document.getElementById('roadStatus');
+        if (roadStatusElement && car) {
+            const status = car.isOnRoad ? 'On Road' : 'Off Road (High Friction)';
+            const color = car.isOnRoad ? 'white' : '#ff6b6b';
+            roadStatusElement.textContent = `Road Status: ${status}`;
+            roadStatusElement.style.color = color;
+        }
+    },
+    updateCameraMode: (mode) => {
+        const cameraModeElement = document.getElementById('cameraMode');
+        if (cameraModeElement) {
+            const modeText = mode === 'orbital' ? 'Orbital Mode' : 'Forward-facing Mode';
+            cameraModeElement.textContent = `Camera: ${modeText}`;
         }
     },
     toggleUI: (enable) => {
@@ -219,6 +301,9 @@ return {
 // Use it in your main loop
 export const ui = createUI();
 ui.toggleUI(true); // Show UI on startup
+
+// Make UI available globally for camera control
+window.ui = ui;
 
 
 // Time tracking for deltaTime

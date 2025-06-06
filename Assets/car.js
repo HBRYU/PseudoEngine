@@ -16,15 +16,14 @@ export class Car extends Entity {
         this.maxSpeed = 40;
         this.engineForce = 8000;   // Reduced slightly for better control
         this.brakeForce = 8000;
-        
-        // Physical properties - UPDATED FOR STABILITY
+          // Physical properties - UPDATED FOR STABILITY
         this.mass = 1200;
         this.momentOfInertia = 2500; // Increased for more stability
-        this.dragCoefficient = 0.35;
+        this.dragCoefficient = 0.55; // Increased for more realistic air resistance
         
         // Tire properties - UPDATED FOR BETTER GRIP
-        this.tireFriction = 0.85;     // Slightly reduced for more realistic sliding
-        this.tireGrip = 0.95;         // Reduced from 0.99 for more progressive sliding
+        this.tireFriction = 0.95;     // Slightly reduced for more realistic sliding
+        this.tireGrip = 0.99;         // Reduced from 0.99 for more progressive sliding
         this.corneringStiffness = 30000; // Reduced for less aggressive cornering
         
         // NEW: Stability control properties
@@ -47,10 +46,14 @@ export class Car extends Entity {
         
         // Set up input handlers
         this.setupInputHandlers();
-        
-        // Debug vectors
+          // Debug vectors
         this.velocityArrow = null;
         this.forceArrow = null;
+          // Road detection for friction adjustment
+        this.roadBounds = [];
+        this.isOnRoad = true;
+        this.offRoadFrictionMultiplier = 20; // Increase friction when off-road
+        this.offRoadDragMultiplier = 40; // Increase drag when off-road (grass, dirt resistance)
     }
 
     setupInputHandlers() {
@@ -316,14 +319,15 @@ export class Car extends Entity {
     Start() {
         // Initialize any state when the car is added to the scene
         console.log("Car controls: WASD or Arrow keys to drive");
-    }
-
-    Update(deltaTime) {
+    }    Update(deltaTime) {
         if (!this.modelLoaded) return; // Wait until model is loaded
         
         // Apply time step constraints to prevent instability
         const maxDeltaTime = 0.05; // Cap at 20 FPS for physics stability
         const constrainedDeltaTime = Math.min(deltaTime, maxDeltaTime);
+
+        // Check if car is on road for friction adjustment
+        this.checkIfOnRoad();
 
         // Calculate forces in local car space
         const forces = this.calculateForces(constrainedDeltaTime);
@@ -368,20 +372,28 @@ export class Car extends Entity {
         if (this.brakePressed) {
             const brakeEfficiency = Math.min(1.0, Math.max(0.2, Math.abs(forwardVelocity) / 5.0));
             forces.longitudinal -= Math.sign(forwardVelocity) * this.brakeForce * brakeEfficiency;
-        }
+        }        // Air resistance - Enhanced for more realistic physics with off-road detection
+        const baseDragCoefficient = 0.5 * this.dragCoefficient * 1.225; // Air density at sea level
+        const frontalArea = 2.4; // Slightly increased frontal area for more realistic drag
         
-        // Air resistance
-        const dragCoefficient = 0.5 * this.dragCoefficient * 1.225;
-        const frontalArea = 2.2;
-        const dragForce = dragCoefficient * frontalArea * speed * speed;
+        // Apply off-road drag multiplier if car is off-road (grass, dirt, sand resistance)
+        const dragMultiplier = this.isOnRoad ? 1.0 : this.offRoadDragMultiplier;
+        const effectiveDragCoefficient = baseDragCoefficient * dragMultiplier;
+        
+        const dragForce = effectiveDragCoefficient * frontalArea * speed * speed;
         
         if (speed > 0.01) {
             forces.longitudinal -= (forwardVelocity / speed) * dragForce;
             forces.lateral -= (lateralVelocity / speed) * dragForce;
+            
+            // Debug output for off-road drag
+            if (!this.isOnRoad && speed > 5.0) { // Only log at reasonable speeds
+                console.log(`OFF-ROAD: Increased drag by ${dragMultiplier}x (Speed: ${(speed * 3.6).toFixed(1)} km/h)`);
+            }
         }
         
-        // Rolling resistance
-        const rollingResistanceCoefficient = 0.015;
+        // Rolling resistance - Increased for more realistic feel
+        const rollingResistanceCoefficient = 0.020; // Increased from 0.015 for more realistic deceleration
         const normalForce = this.mass * 9.81;
         const rollingResistance = rollingResistanceCoefficient * normalForce;
         
@@ -390,60 +402,68 @@ export class Car extends Entity {
         } else if (Math.abs(forwardVelocity) <= 0.1 && !this.accelPressed) {
             forces.longitudinal = -forwardVelocity * this.mass / deltaTime;
         }
-        
-        // Simplified lateral friction (removed progressive friction complexity)
+          // Simplified lateral friction with off-road detection
         if (Math.abs(lateralVelocity) > 0.05) {
-            const lateralFrictionForce = -this.tireFriction * normalForce * Math.sign(lateralVelocity);
+            // Apply off-road friction multiplier if car is off-road
+            const frictionMultiplier = this.isOnRoad ? 1.0 : this.offRoadFrictionMultiplier;
+            const effectiveFriction = this.tireFriction * frictionMultiplier;
+            
+            const lateralFrictionForce = -effectiveFriction * normalForce * Math.sign(lateralVelocity);
             forces.lateral += lateralFrictionForce;
+            
+            // Debug output for off-road detection
+            if (!this.isOnRoad) {
+                console.log(`OFF-ROAD: Increased friction by ${frictionMultiplier}x`);
+            }
         }
-        
-        // FIXED: Speed-dependent steering that works at all speeds
+          // CONSISTENT TORQUE STEERING: Apply same torque regardless of speed
         const steeringInput = this.leftPressed ? 1 : (this.rightPressed ? -1 : 0);
 
-        if (Math.abs(forwardVelocity) > 0.5 && steeringInput !== 0) {
-            const speedInKmh = Math.abs(forwardVelocity) * 3.6; // Convert to km/h
-            
-            // Steering effectiveness curve - maintains steering at high speeds
-            let steeringEffectiveness;
-            if (speedInKmh < 30) {
-                steeringEffectiveness = 1.0; // Full steering at low speeds
-            } else if (speedInKmh < 80) {
-                steeringEffectiveness = 1.0 - ((speedInKmh - 30) / 50) * 0.4; // Reduce to 60% at 80 km/h
-            } else {
-                steeringEffectiveness = 0.6 - ((speedInKmh - 80) / 40) * 0.3; // Reduce to 30% at 120 km/h
-                steeringEffectiveness = Math.max(0.3, steeringEffectiveness); // Never go below 30%
-            }
-            
-            // Maximum steering angle based on speed
-            const maxSteeringAngle = 0.5 * steeringEffectiveness;
+        if (steeringInput !== 0 && Math.abs(forwardVelocity) > 0.5) {
+            // Fixed steering angle (no speed dependency for input)
+            const maxSteeringAngle = 0.5;
             const steeringAngle = steeringInput * maxSteeringAngle;
             
-            // Simple cornering force calculation (removed complex tire model)
+            // Calculate cornering force - this is where speed matters for physics
             const currentSlipAngle = Math.atan2(lateralVelocity, Math.abs(forwardVelocity));
             const targetSlipAngle = currentSlipAngle - steeringAngle;
             
-            // Basic cornering force
+            // Cornering force proportional to speed for realistic physics
             let corneringForce = -this.corneringStiffness * targetSlipAngle;
             
             // Limit cornering force
-            const maxCorneringForce = 15000; // Increased from 8000 for better high-speed response
+            const maxCorneringForce = 15000;
             corneringForce = Math.max(-maxCorneringForce, Math.min(corneringForce, maxCorneringForce));
             
-            // NO stability control interference - apply full cornering force
             forces.lateral += corneringForce;
             
-            // Torque calculation
+            // PHYSICS-BASED TORQUE: Torque proportional to speed for realistic cornering
             const wheelbase = 2.5;
-            let torqueFromSteering = corneringForce * (wheelbase / 2) * Math.sign(forwardVelocity);
             
-            // Scale torque with steering effectiveness
-            torqueFromSteering *= steeringEffectiveness;
+            // The faster you go, the more torque is generated from the same cornering force
+            // This creates realistic understeer at high speeds while maintaining control
+            const baseTorque = corneringForce * (wheelbase / 2) * Math.sign(forwardVelocity);
             
-            forces.torque += torqueFromSteering;
+            // Speed factor for torque - more torque at higher speeds (realistic physics)
+            const speedFactor = Math.min(Math.abs(forwardVelocity) / 10, 2.0); // Cap at 2x for very high speeds
+            const speedProportionalTorque = baseTorque * speedFactor;
             
-            // Debug output for high-speed steering
-            if (speedInKmh > 50) {
-                console.log(`High speed steering - Speed: ${speedInKmh.toFixed(1)} km/h, Effectiveness: ${(steeringEffectiveness * 100).toFixed(1)}%, Force: ${corneringForce.toFixed(0)}`);
+            // Add minimum torque for low-speed maneuverability
+            const minimumTorque = steeringInput * 8000; // Base torque for parking/low-speed turns
+            
+            // Combine physics-based torque with minimum torque
+            const combinedTorque = speedProportionalTorque + minimumTorque;
+            
+            // UPPER BOUND: Limit maximum torque to prevent instability
+            const maxTorque = 25000; // Maximum allowable torque
+            const finalTorque = Math.max(-maxTorque, Math.min(combinedTorque, maxTorque));
+            
+            forces.torque += finalTorque;
+            
+            // Debug output for understanding the physics
+            const speedKmh = Math.abs(forwardVelocity) * 3.6;
+            if (speedKmh > 20) {
+                console.log(`Physics steering - Speed: ${speedKmh.toFixed(1)} km/h, Speed Factor: ${speedFactor.toFixed(2)}x, Torque: ${finalTorque.toFixed(0)} (max: ${maxTorque})`);
             }
         }
         
@@ -610,6 +630,123 @@ export class Car extends Entity {
         this.stabilityFactor = 0.9 - (sensitivity * 0.4); // 0.9 to 0.5
         this.antiSpinDamping = 0.95 - (sensitivity * 0.1); // 0.95 to 0.85
         console.log(`Drift sensitivity set to ${sensitivity} (slip angle: ${this.maxSlipAngle.toFixed(2)})`);
+    }
+      // NEW: Method to set road boundaries for off-road detection
+    setRoadBounds(roadObject) {
+        if (!roadObject) return;
+        
+        this.roadBounds = [];
+        this.roadMesh = null;
+        
+        // Find the actual road mesh (Plane) with geometry data
+        roadObject.traverse((child) => {
+            if (child.isMesh && child.name === 'Plane') {
+                this.roadMesh = child;
+                console.log(`Car: Found road mesh 'Plane' for curved path detection`);
+            }
+            // Keep existing bounding box system as fallback
+            else if (child.isMesh && child.name !== 'Start' && child.name !== 'Finish') {
+                const box = new THREE.Box3().setFromObject(child);
+                this.roadBounds.push({
+                    min: box.min,
+                    max: box.max,
+                    name: child.name
+                });
+            }
+        });
+        
+        console.log(`Car: Road detection setup - Found ${this.roadMesh ? 'curved mesh' : 'no mesh'}, ${this.roadBounds.length} fallback bounds`);
+    }
+      // NEW: Check if car is currently on the road
+    checkIfOnRoad() {
+        if (!this.roadMesh && this.roadBounds.length === 0) {
+            this.isOnRoad = true; // Default to on-road if no bounds set
+            return true;
+        }
+        
+        const carPosition = this.object.position;
+        
+        // First try curved mesh detection if available
+        if (this.roadMesh && this.isPointOnCurvedTrack(carPosition)) {
+            this.isOnRoad = true;
+            return true;
+        }
+        
+        // Fallback to bounding box detection
+        if (this.roadBounds.length > 0) {
+            for (const bound of this.roadBounds) {
+                if (carPosition.x >= bound.min.x && carPosition.x <= bound.max.x &&
+                    carPosition.z >= bound.min.z && carPosition.z <= bound.max.z &&
+                    carPosition.y >= bound.min.y - 1 && carPosition.y <= bound.max.y + 1) {
+                    this.isOnRoad = true;
+                    return true;
+                }
+            }
+        }
+        
+        this.isOnRoad = false;
+        return false;
+    }
+    
+    // NEW: Check if a point is on the curved track using raycasting
+    isPointOnCurvedTrack(position) {
+        if (!this.roadMesh) return false;
+        
+        const raycaster = new THREE.Raycaster();
+        
+        // Cast ray downward from above the car position
+        const rayOrigin = new THREE.Vector3(position.x, position.y + 10, position.z);
+        const rayDirection = new THREE.Vector3(0, -1, 0);
+        
+        raycaster.set(rayOrigin, rayDirection);
+        
+        // Check intersection with the road mesh
+        const intersections = raycaster.intersectObject(this.roadMesh, false);
+        
+        if (intersections.length > 0) {
+            const intersection = intersections[0];
+            // Allow some tolerance for Y position (car might be slightly above/below road)
+            const heightDifference = Math.abs(intersection.point.y - position.y);
+            
+            // If the intersection is close to the car's Y position, we're on the road
+            if (heightDifference < 2.0) { // 2 unit tolerance
+                return true;
+            }
+        }
+        
+        return false;
+    }    // NEW: Method to align car's bottom with ground level (y=0)
+    alignWithGround() {
+        if (!this.modelLoaded) {
+            console.warn("Car model not loaded yet, cannot align with ground");
+            return;
+        }
+        
+        if (!this.object || this.object.children.length === 0) {
+            console.warn("Car object not ready, cannot align with ground");
+            return;
+        }
+        
+        // Calculate the bounding box of the entire car object
+        const box = new THREE.Box3().setFromObject(this.object);
+        
+        // Check if the bounding box is valid
+        if (box.isEmpty()) {
+            console.warn("Car bounding box is empty, using default ground alignment");
+            this.object.position.y = 0.5; // Default height
+            return;
+        }
+        
+        // Get the current bottom of the car
+        const carBottom = box.min.y;
+        
+        // Adjust the car's Y position so its bottom aligns with y=0
+        const currentY = this.object.position.y;
+        const adjustmentY = -carBottom; // Move up by the amount the bottom is below y=0
+        
+        this.object.position.y = currentY + adjustmentY;
+        
+        console.log(`Car aligned with ground: bottom was at ${carBottom.toFixed(3)}, adjusted by ${adjustmentY.toFixed(3)}, now at y=${this.object.position.y.toFixed(3)}`);
     }
 }
 
