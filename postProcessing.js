@@ -168,7 +168,7 @@ export function createPostProcessing(scene, camera, renderer) {
     // Add bloom effect (more compatible with older Three.js)
     const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
-        0.25,  // strength 
+        0.3,  // strength 
         0.3,  // radius
         0.4  // threshold
     );

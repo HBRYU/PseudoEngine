@@ -18,25 +18,101 @@ const scene = new THREE.Scene();
 
 // Load the road from TrackTexture3.json (curved track)
 import { RoadLoader } from './Assets/roadLoader.js';
-const roadLoader = new RoadLoader('Road', './Assets/TrackTexture3.json', scene);
+const roadLoader = new RoadLoader('Road', './Assets/TrackWTrees.json', scene);
 roadLoader.Init();
 entityList.push(roadLoader);
 
-// Add a white background plane underneath the road for contrast
+// Add a textured background plane underneath the road
 import { Plane } from './Assets/plane.js';
 const backgroundPlane = new Plane('BackgroundPlane', 1000, 1000);
 backgroundPlane.Init();
 backgroundPlane.position.set(0, -0.1, 0);
-// Make it white for contrast with the black road
-if (backgroundPlane.object && backgroundPlane.object.material) {
-    backgroundPlane.object.material.color.setHex(0xffffff);
-}
+
+// Load and apply ground texture from GroundTexture.json
+const textureLoader = new THREE.TextureLoader();
+fetch('./Assets/GroundTexture.json')
+    .then(response => response.json())
+    .then(groundData => {
+        if (groundData.textures && groundData.images && backgroundPlane.object && backgroundPlane.object.material) {
+            // Find the diffuse texture
+            const diffuseTexture = groundData.textures.find(tex => tex.name.includes('diff'));
+            const normalTexture = groundData.textures.find(tex => tex.name.includes('nor'));
+            const roughnessTexture = groundData.textures.find(tex => tex.name.includes('rough'));
+            
+            if (diffuseTexture) {
+                // Find corresponding image data
+                const diffuseImage = groundData.images.find(img => img.uuid === diffuseTexture.image);
+                if (diffuseImage && diffuseImage.url) {
+                    // Load the base64 texture
+                    const texture = textureLoader.load(diffuseImage.url);
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(100, 100); // Tile the texture across the large plane
+                    texture.flipY = false;
+                    
+                    // Apply to material
+                    backgroundPlane.object.material.map = texture;
+                    backgroundPlane.object.material.needsUpdate = true;
+                    
+                    console.log('Applied ground diffuse texture');
+                }
+            }
+            
+            // Apply normal map if available
+            if (normalTexture) {
+                const normalImage = groundData.images.find(img => img.uuid === normalTexture.image);
+                if (normalImage && normalImage.url) {
+                    const normalMap = textureLoader.load(normalImage.url);
+                    normalMap.wrapS = THREE.RepeatWrapping;
+                    normalMap.wrapT = THREE.RepeatWrapping;
+                    normalMap.repeat.set(100, 100);
+                    normalMap.flipY = false;
+                    
+                    backgroundPlane.object.material.normalMap = normalMap;
+                    backgroundPlane.object.material.normalScale.set(1, -1); // Match the original normal scale
+                    backgroundPlane.object.material.needsUpdate = true;
+                    
+                    console.log('Applied ground normal map');
+                }
+            }
+            
+            // Apply roughness map if available
+            if (roughnessTexture) {
+                const roughnessImage = groundData.images.find(img => img.uuid === roughnessTexture.image);
+                if (roughnessImage && roughnessImage.url) {
+                    const roughMap = textureLoader.load(roughnessImage.url);
+                    roughMap.wrapS = THREE.RepeatWrapping;
+                    roughMap.wrapT = THREE.RepeatWrapping;
+                    roughMap.repeat.set(100, 100);
+                    roughMap.flipY = false;
+                    
+                    backgroundPlane.object.material.roughnessMap = roughMap;
+                    backgroundPlane.object.material.needsUpdate = true;
+                    
+                    console.log('Applied ground roughness map');
+                }
+            }
+            
+            // Set material properties to match the original
+            backgroundPlane.object.material.roughness = 1;
+            backgroundPlane.object.material.metalness = 0;
+            backgroundPlane.object.material.color.setHex(0xbfb5b0);
+        }
+    })
+    .catch(error => {
+        console.warn('Failed to load ground texture, using default white:', error);
+        // Fallback to white for contrast with the black road
+        if (backgroundPlane.object && backgroundPlane.object.material) {
+            backgroundPlane.object.material.color.setHex(0xffffff);
+        }
+    });
+
 entityList.push(backgroundPlane);
 
 import { Car } from './Assets/car.js';
 const car = new Car('Car');
 car.Init(); // Call Init to create the mesh
-car.setScale(0.01, 0.01, 0.01); // Scale the car down
+car.setScale(0.015, 0.015, 0.015); // Scale the car down
 
 // Position car at start point (we'll update this once road loads)
 car.object.position.set(0, 0, 0); // Car model is slightly above ground, so we can set Y to 0
@@ -45,75 +121,56 @@ entityList.push(car);
 // Set up car positioning after road loads
 let carPositionInterval = setInterval(() => {
     if (roadLoader.isLoaded && car.modelLoaded) {
+        // use raw startPosition – no scaling
         let startPos = roadLoader.getStartPosition();
-          // If no start position found, use default
-        if (!startPos || (startPos.x === 0 && startPos.y === 0 && startPos.z === 0)) {
-            console.log('No start position found, using default position');
-            // Default start position - this will be scaled by roadScale below
-            startPos = new THREE.Vector3(-1.7, 0, -14.4); // Default start position based on typical TrackTexture3.json
-        }
-        
-        // Account for road scaling (3x) - multiply start position by road scale
-        const roadScale = 0.75; // Don't know why but this works. Don't touch.
-        const scaledStartPos = new THREE.Vector3(
-            startPos.x * roadScale,
-            startPos.y, // Y position stays the same (road is scaled as 3, 1, 3)
-            startPos.z * roadScale
-        );
-        
-        // Position car at the scaled start position
-        car.object.position.set(scaledStartPos.x, scaledStartPos.y + 0.5, scaledStartPos.z); // Add small Y offset
-        car.object.rotation.set(0, Math.PI, 0); // Face the car forward
 
-        console.log(`Car positioned at scaled start: (${scaledStartPos.x}, ${scaledStartPos.y + 0.5}, ${scaledStartPos.z})`);
-        console.log(`Original start pos: (${startPos.x}, ${startPos.y}, ${startPos.z}), Road scale: ${roadScale}`);
-        
-        // Adjust car Y position to align bottom with ground (y=0) - only after model is loaded
+        // default fallback if loader failed to find one
+        if (!startPos) {
+            console.warn('No start pos, using hard-coded default');
+            startPos = new THREE.Vector3(-1.7, 0, -14.4);
+        }
+
+        // directly place car at marker + a small Y offset
+        car.object.position.set(
+            startPos.x,
+            startPos.y + 0.5,
+            startPos.z
+        );
+        car.object.rotation.set(0, Math.PI, 0);
         car.alignWithGround();
-        
-        console.log(`Car final position: (${car.object.position.x}, ${car.object.position.y}, ${car.object.position.z})`);
-        
-        // Set up road bounds for off-road detection
+
         if (roadLoader.object) {
             car.setRoadBounds(roadLoader.object);
-            console.log('Road bounds set up for car off-road detection');
         }
-        
-        clearInterval(carPositionInterval); // Stop checking once positioned
-        clearTimeout(carPositionTimeout); // Clear the timeout as well
-        console.log('Car successfully spawned and positioned!');
-    } else {
-        console.log(`Waiting for: roadLoader.isLoaded=${roadLoader.isLoaded}, car.modelLoaded=${car.modelLoaded}`);
+
+        clearInterval(carPositionInterval);
+        clearTimeout(carPositionTimeout);
+        console.log('Car positioned at', car.object.position);
     }
 }, 100); // Check every 100ms
 
 // Add timeout to prevent infinite waiting - store reference so we can clear it
 const carPositionTimeout = setTimeout(() => {
-    if (carPositionInterval) {
-        clearInterval(carPositionInterval);
-        console.warn('Car positioning timeout - forcing default position');
-        // Force position the car even if something didn't load properly
-        // Use scaled default position to match road scaling
-        const roadScale = 3;
-        car.object.position.set(0 * roadScale, 0.5, 0 * roadScale);
-        if (car.modelLoaded) {
-            car.alignWithGround();
-        }
-    }
+    clearInterval(carPositionInterval);
+    console.warn('Position timeout – forcing default');
+    car.object.position.set(0, 0.5, 0);
+    if (car.modelLoaded) car.alignWithGround();
 }, 5000); // 5 second timeout
 
 
+import { GrassInstancer } from './Assets/grassInstancer.js';
 
-import { Pillar } from './Assets/pillar.js';
-// Position pillars along the road areas - will be adjusted once road loads
-const pillars = [];
-for (let i = 0; i < 5; i++) {
-    const pillar = new Pillar(`Pillar${i + 1}`, 0.5, 5);
-    pillar.Init(); // Call Init to create the mesh
-    pillar.position.set(Math.random() * 100 - 50, pillar.height / 2, Math.random() * 100 - 50); // Spread around road area
-    entityList.push(pillar);
-    pillars.push(pillar);
-}
+const grassInstancer = new GrassInstancer(
+  './Assets/Grass objects.json',
+  roadLoader,       // your already created RoadLoader instance
+  3000,              // number of each grass‐mesh
+  1200               // half‐size of the square area to scatter over
+);
+
+// wait for the road to load before placing grass
+roadLoader.Init().then(() => grassInstancer.Init());
+
+
 
 // // In init.js
 // import { TileMap, TileType } from './Assets/road.js';
@@ -159,17 +216,17 @@ const lights = {
         }
     },
     night: {
-        ambient: {color: 0x0a1929, intensity: 50},
+        ambient: {color: 0x0a1929, intensity: 100},
         directional: {
             color: 0xc7ebff, 
-            intensity: 2,
+            intensity: 1,
             position: new THREE.Vector3(-5, 15, 5)
         }
     }
 };
 
 // Current lighting mode
-let currentLightingMode = 'noon';
+let currentLightingMode = 'sunset';
 
 // Add lighting
 const ambientLight = new THREE.AmbientLight(
@@ -222,7 +279,7 @@ const renderer = new THREE.WebGLRenderer({
     antialias: false // Disable antialiasing for pixelated look
 });
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.VSMShadowMap;   // soft penumbra
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 // Set texture filtering to nearest for sharp pixels
@@ -238,7 +295,7 @@ function createUI() {
     uiContainer.style.position = 'absolute';
     uiContainer.style.top = '0';
     uiContainer.style.left = '0';
-    uiContainer.style.width = '100%';
+    uiContainer.style.width = '50%';
     uiContainer.style.pointerEvents = 'none'; // Let clicks pass through to canvas
     document.body.appendChild(uiContainer);
     
@@ -340,7 +397,7 @@ function updateLightingForCamera(cameraPosition) {
     
     // Scale shadow area based on camera height/zoom - much larger coverage
     const cameraHeight = Math.abs(cameraPosition.y);
-    const shadowSize = Math.max(50, cameraHeight * 3); // Increased minimum and multiplier
+    const shadowSize = Math.max(100, cameraHeight * 3); // Increased minimum and multiplier
     
     // Update shadow camera - center on camera position for better coverage
     const cam = directionalLight.shadow.camera;
@@ -358,10 +415,11 @@ function updateLightingForCamera(cameraPosition) {
     
     // Increase shadow distance based on scene size
     cam.near = 0.1;
-    cam.far = shadowSize * 2; // Dynamic far plane
+    cam.far = shadowSize * 3; // Dynamic far plane
     
     cam.updateProjectionMatrix();
 }
 
 // Export the function so it can be used in main.js
 export { updateLightingForCamera };
+

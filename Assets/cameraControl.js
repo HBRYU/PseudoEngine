@@ -10,12 +10,12 @@ export class CameraControl extends Entity {
         this.tag = 'cameraControl';
         this.speed = speed; // Speed of camera movement
         this.target = null;  // should be set in init.js
-        this.offset = new THREE.Vector3(20, 20, 20); // Offset from the target position
+        this.offset = new THREE.Vector3(30, 30, 30); // Offset from the target position
         this.cameraPosition = new THREE.Vector3(0, 0, 0); // Current camera position
         
         // Camera modes
         this.cameraMode = 'orbital'; // 'orbital' or 'forward'
-        this.forwardOffset = new THREE.Vector3(0, 8, -15); // Offset behind car for forward mode
+        this.forwardOffset = new THREE.Vector3(0, 12, -25); // Offset behind car for forward mode
         
         // Orbit controls
         this.orbitAngle = 0; // Current horizontal orbit angle in radians
